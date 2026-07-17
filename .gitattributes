@@ -1,0 +1,5 @@
+# These fixtures are asserted byte-for-byte in test/snappyex_test.exs.
+# Preserve the corpus representation on every checkout.
+testdata/alice29.txt text eol=crlf
+testdata/html -text
+testdata/urls.10K text eol=crlf
