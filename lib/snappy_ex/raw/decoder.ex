@@ -35,7 +35,12 @@ defmodule SnappyEx.Raw.Decoder do
   end
 
   defp decode_preamble(binary), do: decode_preamble(binary, 0, 0)
-  defp decode_preamble(_binary, _size, shift) when shift >= 35, do: {:error, :malformed_preamble}
+
+  defp decode_preamble(<<byte, rest::binary>>, size, 28) when byte <= 0x0F do
+    {:ok, size ||| byte <<< 28, rest}
+  end
+
+  defp decode_preamble(_binary, _size, 28), do: {:error, :malformed_preamble}
 
   defp decode_preamble(<<byte, rest::binary>>, size, shift) do
     size = size ||| band(byte, 0x7F) <<< shift

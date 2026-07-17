@@ -128,6 +128,11 @@ defmodule SnappyExTest do
     assert SnappyEx.decompress(<<9, 8, "abc", 23, 3, 0, 0, 0>>) == {:ok, "abcabcabc"}
   end
 
+  test "enforces uint32 bounds on the raw snappy length preamble" do
+    assert SnappyEx.decompress(<<0xFF, 0xFF, 0xFF, 0xFF, 0x0F>>) == {:error, :invalid_length}
+    assert SnappyEx.decompress(<<0x80, 0x80, 0x80, 0x80, 0x10>>) == {:error, :malformed_preamble}
+  end
+
   test "rejects malformed raw snappy blocks" do
     assert SnappyEx.decompress(<<>>) == {:error, :empty_input}
     assert SnappyEx.decompress(<<0x80>>) == {:error, :malformed_preamble}
