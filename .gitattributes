@@ -1,3 +1,7 @@
+# Keep formatter-managed Elixir files stable across platforms.
+*.ex text eol=lf
+*.exs text eol=lf
+
 # These fixtures are asserted byte-for-byte in test/snappyex_test.exs.
 # Preserve the corpus representation on every checkout.
 testdata/alice29.txt text eol=crlf
