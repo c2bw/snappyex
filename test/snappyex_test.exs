@@ -192,6 +192,13 @@ defmodule SnappyExTest do
     assert byte_size(second) > 4
   end
 
+  test "accepts compressed framed chunks at the 64 KiB limit" do
+    input = :binary.copy("a", 65_536)
+    compressed = assert_framed_roundtrips(input)
+
+    assert <<0xFF, 6::little-24, "sNaPpY", 0x00, _chunk::binary>> = compressed
+  end
+
   test "parallel framed compression preserves chunk order" do
     stream_identifier = <<0xFF, 6::little-24, "sNaPpY">>
 
@@ -236,6 +243,9 @@ defmodule SnappyExTest do
     stream_identifier = <<0xFF, 6::little-24, "sNaPpY">>
     framed = SnappyEx.compress_framed("abc")
     bad_checksum = binary_part(framed, 0, byte_size(framed) - 1) <> <<0>>
+    oversized_raw = <<0x81, 0x80, 0x04, 0x01, 0x00>>
+    oversized_payload = <<0::little-32, oversized_raw::binary>>
+    oversized_chunk = <<0x00, byte_size(oversized_payload)::little-24, oversized_payload::binary>>
 
     assert SnappyEx.decompress_framed(<<>>) == {:error, :missing_stream_identifier}
     assert SnappyEx.decompress_framed("abc") == {:error, :missing_stream_identifier}
@@ -243,6 +253,7 @@ defmodule SnappyExTest do
     assert SnappyEx.decompress_framed(stream_identifier <> <<0x00, 1, 0>>) == {:error, :truncated_chunk_header}
     assert SnappyEx.decompress_framed(stream_identifier <> <<0x02, 0::little-24>>) == {:error, :unsupported_chunk}
     assert SnappyEx.decompress_framed(stream_identifier <> <<0x00, 3::little-24, "abc">>) == {:error, :invalid_chunk_length}
+    assert SnappyEx.decompress_framed(stream_identifier <> oversized_chunk) == {:error, :invalid_chunk_length}
     assert SnappyEx.decompress_framed(bad_checksum) == {:error, :checksum_mismatch}
 
     assert_raise ArgumentError, fn ->

@@ -11,9 +11,23 @@ defmodule SnappyEx.Raw.Decoder do
           | :invalid_offset
           | :invalid_length
 
+  @type limited_decompress_error :: decompress_error | :output_too_large
+
   @spec decompress(binary) :: {:ok, binary} | {:error, decompress_error}
   def decompress(compressed) when is_binary(compressed) do
+    decompress_with_limit(compressed, :infinity)
+  end
+
+  @doc false
+  @spec decompress_limited(binary, non_neg_integer) :: {:ok, binary} | {:error, limited_decompress_error}
+  def decompress_limited(compressed, max_output_size)
+      when is_binary(compressed) and is_integer(max_output_size) and max_output_size >= 0 do
+    decompress_with_limit(compressed, max_output_size)
+  end
+
+  defp decompress_with_limit(compressed, max_output_size) do
     with {:ok, expected_size, commands} <- decode_preamble(compressed),
+         :ok <- validate_output_size(expected_size, max_output_size),
          {:ok, output} <- decode_commands(commands, expected_size, <<>>, 0) do
       {:ok, output}
     end
@@ -26,6 +40,10 @@ defmodule SnappyEx.Raw.Decoder do
       {:error, reason} -> raise ArgumentError, "invalid snappy block: #{reason}"
     end
   end
+
+  defp validate_output_size(_expected_size, :infinity), do: :ok
+  defp validate_output_size(expected_size, max_output_size) when expected_size <= max_output_size, do: :ok
+  defp validate_output_size(_expected_size, _max_output_size), do: {:error, :output_too_large}
 
   defp decode_preamble(<<>>), do: {:error, :empty_input}
   defp decode_preamble(<<size, commands::binary>>) when size < 0x80, do: {:ok, size, commands}

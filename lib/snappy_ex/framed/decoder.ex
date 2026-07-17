@@ -2,6 +2,7 @@ defmodule SnappyEx.Framed.Decoder do
   @moduledoc false
 
   alias SnappyEx.Framed.Checksum
+  alias SnappyEx.Raw.Decoder, as: RawDecoder
 
   @max_uncompressed_chunk_size 65_536
   @stream_identifier "sNaPpY"
@@ -73,7 +74,6 @@ defmodule SnappyEx.Framed.Decoder do
 
   defp decode_chunk(@compressed_data, <<expected_checksum::little-32, compressed::binary>>) do
     with {:ok, uncompressed} <- decode_raw_chunk(compressed),
-         :ok <- validate_uncompressed_size(uncompressed),
          :ok <- validate_checksum(uncompressed, expected_checksum) do
       {:ok, uncompressed}
     end
@@ -97,8 +97,9 @@ defmodule SnappyEx.Framed.Decoder do
   defp decode_chunk(_type, _payload), do: {:error, :unsupported_chunk}
 
   defp decode_raw_chunk(compressed) do
-    case SnappyEx.Raw.decompress(compressed) do
+    case RawDecoder.decompress_limited(compressed, @max_uncompressed_chunk_size) do
       {:ok, uncompressed} -> {:ok, uncompressed}
+      {:error, :output_too_large} -> {:error, :invalid_chunk_length}
       {:error, reason} -> {:error, {:invalid_compressed_chunk, reason}}
     end
   end
