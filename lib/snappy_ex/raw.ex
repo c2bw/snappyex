@@ -6,9 +6,9 @@ defmodule SnappyEx.Raw do
   @spec compress(binary) :: binary
   defdelegate compress(input), to: SnappyEx.Raw.Encoder
 
-  @spec decompress(binary) :: {:ok, binary} | {:error, decompress_error}
-  defdelegate decompress(compressed), to: SnappyEx.Raw.Decoder
+  @spec decompress(binary, keyword) :: {:ok, binary} | {:error, decompress_error}
+  def decompress(compressed, opts \\ []), do: SnappyEx.Raw.Decoder.decompress(compressed, opts)
 
-  @spec decompress!(binary) :: binary
-  defdelegate decompress!(compressed), to: SnappyEx.Raw.Decoder
+  @spec decompress!(binary, keyword) :: binary
+  def decompress!(compressed, opts \\ []), do: SnappyEx.Raw.Decoder.decompress!(compressed, opts)
 end

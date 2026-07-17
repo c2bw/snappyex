@@ -33,6 +33,16 @@ SnappyEx.decompress_framed(compressed)
 #=> {:ok, "banana bandana"}
 ```
 
+When decompressing untrusted input, bound the returned data with
+`max_output_size`, expressed in uncompressed bytes. Raw blocks are rejected
+from their declared size before decoding, while framed streams enforce the
+limit across all chunks:
+
+```elixir
+SnappyEx.decompress(SnappyEx.compress(input), max_output_size: 1_000_000)
+SnappyEx.decompress_framed(SnappyEx.compress_framed(input), max_output_size: 1_000_000)
+```
+
 Process framed streams lazily when the complete input or output should not be kept in
 memory:
 

@@ -9,11 +9,11 @@ defmodule SnappyEx.Framed do
   @spec compress_stream(binary | Enumerable.t()) :: Enumerable.t()
   defdelegate compress_stream(input), to: SnappyEx.Framed.Encoder
 
-  @spec decompress(binary) :: {:ok, binary} | {:error, decompress_error}
-  defdelegate decompress(compressed), to: SnappyEx.Framed.Decoder
+  @spec decompress(binary, keyword) :: {:ok, binary} | {:error, decompress_error}
+  def decompress(compressed, opts \\ []), do: SnappyEx.Framed.Decoder.decompress(compressed, opts)
 
-  @spec decompress!(binary) :: binary
-  defdelegate decompress!(compressed), to: SnappyEx.Framed.Decoder
+  @spec decompress!(binary, keyword) :: binary
+  def decompress!(compressed, opts \\ []), do: SnappyEx.Framed.Decoder.decompress!(compressed, opts)
 
   @spec decompress_stream(binary | Enumerable.t(), keyword) :: Enumerable.t()
   def decompress_stream(input, opts \\ []), do: SnappyEx.Framed.Decoder.decompress_stream(input, opts)

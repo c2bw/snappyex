@@ -24,19 +24,22 @@ defmodule SnappyEx.Framed.Decoder do
           | :invalid_chunk_length
           | :unsupported_chunk
           | :checksum_mismatch
+          | :output_limit_exceeded
           | {:invalid_compressed_chunk, SnappyEx.Raw.decompress_error()}
 
-  @spec decompress(binary) :: {:ok, binary} | {:error, decompress_error}
-  def decompress(compressed) when is_binary(compressed) do
+  @spec decompress(binary, keyword) :: {:ok, binary} | {:error, decompress_error}
+  def decompress(compressed, opts \\ []) when is_binary(compressed) do
+    max_output_size = max_output_size(opts)
+
     with {:ok, rest} <- decode_initial_stream_identifier(compressed),
-         {:ok, output} <- decode_chunks(rest, []) do
+         {:ok, output} <- decode_chunks(rest, [], 0, max_output_size) do
       {:ok, output}
     end
   end
 
-  @spec decompress!(binary) :: binary
-  def decompress!(compressed) when is_binary(compressed) do
-    case decompress(compressed) do
+  @spec decompress!(binary, keyword) :: binary
+  def decompress!(compressed, opts \\ []) when is_binary(compressed) do
+    case decompress(compressed, opts) do
       {:ok, output} -> output
       {:error, reason} -> raise ArgumentError, "invalid snappy framed stream: #{inspect(reason)}"
     end
@@ -44,7 +47,7 @@ defmodule SnappyEx.Framed.Decoder do
 
   @spec decompress_stream(binary | Enumerable.t(), keyword) :: Enumerable.t()
   def decompress_stream(input, opts \\ []) do
-    max_output_size = stream_max_output_size(opts)
+    max_output_size = max_output_size(opts)
 
     parser = %{
       phase: :header,
@@ -63,7 +66,7 @@ defmodule SnappyEx.Framed.Decoder do
     )
   end
 
-  defp stream_max_output_size(opts) do
+  defp max_output_size(opts) do
     opts = Keyword.validate!(opts, max_output_size: :infinity)
 
     case Keyword.fetch!(opts, :max_output_size) do
@@ -261,23 +264,39 @@ defmodule SnappyEx.Framed.Decoder do
 
   defp decode_initial_stream_identifier(_compressed), do: {:error, :missing_stream_identifier}
 
-  defp decode_chunks(<<>>, acc), do: {:ok, acc |> Enum.reverse() |> IO.iodata_to_binary()}
+  defp decode_chunks(<<>>, acc, _output_size, _max_output_size) do
+    {:ok, acc |> Enum.reverse() |> IO.iodata_to_binary()}
+  end
 
-  defp decode_chunks(compressed, _acc) when byte_size(compressed) < 4 do
+  defp decode_chunks(compressed, _acc, _output_size, _max_output_size) when byte_size(compressed) < 4 do
     {:error, :truncated_chunk_header}
   end
 
-  defp decode_chunks(<<type, length::little-24, rest::binary>>, acc) do
+  defp decode_chunks(<<type, length::little-24, rest::binary>>, acc, output_size, max_output_size) do
     if byte_size(rest) < length do
       {:error, :truncated_chunk}
     else
       <<payload::binary-size(^length), chunk_rest::binary>> = rest
 
-      with {:ok, decoded} <- decode_chunk(type, payload) do
-        decode_chunks(chunk_rest, [decoded | acc])
+      with {:ok, decoded} <- decode_chunk(type, payload),
+           {:ok, output_size} <- add_output_size(output_size, decoded, max_output_size) do
+        decode_chunks(chunk_rest, [decoded | acc], output_size, max_output_size)
       end
     end
   end
+
+  defp add_output_size(output_size, decoded, max_output_size) do
+    output_size = output_size + decoded_size(decoded)
+
+    if max_output_size == :infinity or output_size <= max_output_size do
+      {:ok, output_size}
+    else
+      {:error, :output_limit_exceeded}
+    end
+  end
+
+  defp decoded_size([]), do: 0
+  defp decoded_size(decoded), do: byte_size(decoded)
 
   defp decode_chunk(@compressed_data, payload) when byte_size(payload) > @max_compressed_chunk_size do
     {:error, :invalid_chunk_length}
@@ -310,7 +329,7 @@ defmodule SnappyEx.Framed.Decoder do
   defp decode_raw_chunk(compressed) do
     case RawDecoder.decompress_limited(compressed, @max_uncompressed_chunk_size) do
       {:ok, uncompressed} -> {:ok, uncompressed}
-      {:error, :output_too_large} -> {:error, :invalid_chunk_length}
+      {:error, :output_limit_exceeded} -> {:error, :invalid_chunk_length}
       {:error, reason} -> {:error, {:invalid_compressed_chunk, reason}}
     end
   end

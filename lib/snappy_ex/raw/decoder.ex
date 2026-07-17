@@ -10,16 +10,15 @@ defmodule SnappyEx.Raw.Decoder do
           | :truncated_copy
           | :invalid_offset
           | :invalid_length
+          | :output_limit_exceeded
 
-  @type limited_decompress_error :: decompress_error | :output_too_large
-
-  @spec decompress(binary) :: {:ok, binary} | {:error, decompress_error}
-  def decompress(compressed) when is_binary(compressed) do
-    decompress_with_limit(compressed, :infinity)
+  @spec decompress(binary, keyword) :: {:ok, binary} | {:error, decompress_error}
+  def decompress(compressed, opts \\ []) when is_binary(compressed) do
+    decompress_with_limit(compressed, max_output_size(opts))
   end
 
   @doc false
-  @spec decompress_limited(binary, non_neg_integer) :: {:ok, binary} | {:error, limited_decompress_error}
+  @spec decompress_limited(binary, non_neg_integer) :: {:ok, binary} | {:error, decompress_error}
   def decompress_limited(compressed, max_output_size)
       when is_binary(compressed) and is_integer(max_output_size) and max_output_size >= 0 do
     decompress_with_limit(compressed, max_output_size)
@@ -33,17 +32,27 @@ defmodule SnappyEx.Raw.Decoder do
     end
   end
 
-  @spec decompress!(binary) :: binary
-  def decompress!(compressed) when is_binary(compressed) do
-    case decompress(compressed) do
+  @spec decompress!(binary, keyword) :: binary
+  def decompress!(compressed, opts \\ []) when is_binary(compressed) do
+    case decompress(compressed, opts) do
       {:ok, output} -> output
       {:error, reason} -> raise ArgumentError, "invalid snappy block: #{reason}"
     end
   end
 
+  defp max_output_size(opts) do
+    opts = Keyword.validate!(opts, max_output_size: :infinity)
+
+    case Keyword.fetch!(opts, :max_output_size) do
+      :infinity -> :infinity
+      size when is_integer(size) and size >= 0 -> size
+      value -> raise ArgumentError, "expected :max_output_size to be a non-negative integer or :infinity, got: #{inspect(value)}"
+    end
+  end
+
   defp validate_output_size(_expected_size, :infinity), do: :ok
   defp validate_output_size(expected_size, max_output_size) when expected_size <= max_output_size, do: :ok
-  defp validate_output_size(_expected_size, _max_output_size), do: {:error, :output_too_large}
+  defp validate_output_size(_expected_size, _max_output_size), do: {:error, :output_limit_exceeded}
 
   defp decode_preamble(<<>>), do: {:error, :empty_input}
   defp decode_preamble(<<size, commands::binary>>) when size < 0x80, do: {:ok, size, commands}

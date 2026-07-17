@@ -133,6 +133,30 @@ defmodule SnappyExTest do
     assert SnappyEx.decompress(<<0x80, 0x80, 0x80, 0x80, 0x10>>) == {:error, :malformed_preamble}
   end
 
+  test "limits one-shot raw decompression output" do
+    input = :binary.copy("abcd", 1_000)
+    compressed = SnappyEx.compress(input)
+
+    assert SnappyEx.decompress(compressed, max_output_size: byte_size(input)) == {:ok, input}
+    assert SnappyEx.decompress(compressed, max_output_size: byte_size(input) - 1) == {:error, :output_limit_exceeded}
+    assert SnappyEx.decompress(<<0>>, max_output_size: 0) == {:ok, <<>>}
+
+    assert SnappyEx.decompress(<<0xFF, 0xFF, 0xFF, 0xFF, 0x0F>>, max_output_size: 1_000) ==
+             {:error, :output_limit_exceeded}
+
+    assert_raise ArgumentError, ~r/output_limit_exceeded/, fn ->
+      SnappyEx.decompress!(compressed, max_output_size: byte_size(input) - 1)
+    end
+
+    assert_raise ArgumentError, ~r/max_output_size/, fn ->
+      SnappyEx.decompress(compressed, max_output_size: -1)
+    end
+
+    assert_raise ArgumentError, ~r/unknown keys \[:unknown\]/, fn ->
+      SnappyEx.decompress(compressed, unknown: true)
+    end
+  end
+
   test "rejects malformed raw snappy blocks" do
     assert SnappyEx.decompress(<<>>) == {:error, :empty_input}
     assert SnappyEx.decompress(<<0x80>>) == {:error, :malformed_preamble}
@@ -192,6 +216,22 @@ defmodule SnappyExTest do
     assert second_type in [0x00, 0x01]
     assert byte_size(first) > 4
     assert byte_size(second) > 4
+  end
+
+  test "limits aggregate one-shot framed decompression output" do
+    input = :binary.copy("a", 65_537)
+    compressed = SnappyEx.compress_framed(input)
+
+    assert SnappyEx.decompress_framed(compressed, max_output_size: byte_size(input)) == {:ok, input}
+
+    assert SnappyEx.decompress_framed(compressed, max_output_size: byte_size(input) - 1) ==
+             {:error, :output_limit_exceeded}
+
+    assert SnappyEx.decompress_framed(<<>>, max_output_size: 0) == {:ok, <<>>}
+
+    assert_raise ArgumentError, ~r/output_limit_exceeded/, fn ->
+      SnappyEx.decompress_framed!(compressed, max_output_size: byte_size(input) - 1)
+    end
   end
 
   test "accepts compressed framed chunks at the 64 KiB limit" do
