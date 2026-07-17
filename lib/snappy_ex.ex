@@ -6,7 +6,8 @@ defmodule SnappyEx do
   format: an uncompressed-size varint followed by literal and copy commands.
 
   `compress_framed/1` and `decompress_framed/1` work with the Snappy framed
-  stream format.
+  stream format. `compress_framed_stream/1` and `decompress_framed_stream/2`
+  provide lazy, bounded-memory framed processing.
   """
 
   @type decompress_error :: SnappyEx.Raw.decompress_error()
@@ -39,6 +40,16 @@ defmodule SnappyEx do
   defdelegate compress_framed(input), to: SnappyEx.Framed, as: :compress
 
   @doc """
+  Lazily compresses a binary or enumerable of iodata chunks into a Snappy framed stream.
+
+  The returned stream yields binary frame fragments and begins with the stream
+  identifier. Concatenating the fragments produces the same bytes as
+  `compress_framed/1` for the same input.
+  """
+  @spec compress_framed_stream(binary | Enumerable.t()) :: Enumerable.t()
+  defdelegate compress_framed_stream(input), to: SnappyEx.Framed, as: :compress_stream
+
+  @doc """
   Decompresses a Snappy framed stream.
 
   Returns `{:ok, binary}` on success or `{:error, reason}` for malformed input.
@@ -51,4 +62,21 @@ defmodule SnappyEx do
   """
   @spec decompress_framed!(binary) :: binary
   defdelegate decompress_framed!(compressed), to: SnappyEx.Framed, as: :decompress!
+
+  @doc """
+  Lazily decompresses a binary or enumerable of iodata chunks containing a Snappy framed stream.
+
+  Each yielded binary is a complete checksum-verified data chunk. Input may be
+  split at arbitrary byte boundaries.
+
+  ## Options
+
+    * `:max_output_size` - maximum total number of uncompressed bytes to yield,
+      or `:infinity` for no aggregate limit. Defaults to `:infinity`.
+
+  Malformed input and output-limit violations raise `ArgumentError` when the
+  returned stream reaches the offending chunk. Unread input is not validated.
+  """
+  @spec decompress_framed_stream(binary | Enumerable.t(), keyword) :: Enumerable.t()
+  def decompress_framed_stream(input, opts \\ []), do: SnappyEx.Framed.decompress_stream(input, opts)
 end

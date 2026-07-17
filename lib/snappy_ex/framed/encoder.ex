@@ -2,6 +2,7 @@ defmodule SnappyEx.Framed.Encoder do
   @moduledoc false
 
   alias SnappyEx.Framed.Checksum
+  alias SnappyEx.Framed.StreamInput
 
   @max_uncompressed_chunk_size 65_536
   @parallel_compression_threshold @max_uncompressed_chunk_size * 4
@@ -15,6 +16,49 @@ defmodule SnappyEx.Framed.Encoder do
   @spec compress(binary) :: binary
   def compress(input) when is_binary(input) do
     [@stream_identifier | encode_chunks(input)]
+    |> IO.iodata_to_binary()
+  end
+
+  @spec compress_stream(binary | Enumerable.t()) :: Enumerable.t()
+  def compress_stream(input) do
+    end_marker = make_ref()
+
+    encoded_chunks =
+      input
+      |> StreamInput.chunks(@max_uncompressed_chunk_size)
+      |> Stream.concat([end_marker])
+      |> Stream.transform({0, []}, fn
+        ^end_marker, {0, []} ->
+          {[], {0, []}}
+
+        ^end_marker, {_buffered_size, buffered_parts} ->
+          buffered = buffered_parts |> Enum.reverse() |> IO.iodata_to_binary()
+          {[encode_stream_chunk(buffered)], {0, []}}
+
+        chunk, buffered ->
+          encode_stream_input_chunk(buffered, chunk)
+      end)
+
+    Stream.concat([@stream_identifier], encoded_chunks)
+  end
+
+  defp encode_stream_input_chunk({buffered_size, buffered_parts}, chunk) do
+    needed = @max_uncompressed_chunk_size - buffered_size
+
+    if byte_size(chunk) < needed do
+      {[], {buffered_size + byte_size(chunk), [chunk | buffered_parts]}}
+    else
+      <<chunk_head::binary-size(^needed), rest::binary>> = chunk
+      uncompressed = IO.iodata_to_binary([Enum.reverse(buffered_parts), chunk_head])
+      rest_parts = if rest == <<>>, do: [], else: [rest]
+
+      {[encode_stream_chunk(uncompressed)], {byte_size(rest), rest_parts}}
+    end
+  end
+
+  defp encode_stream_chunk(uncompressed) do
+    uncompressed
+    |> encode_data_chunk()
     |> IO.iodata_to_binary()
   end
 

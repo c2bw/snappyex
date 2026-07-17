@@ -33,6 +33,25 @@ SnappyEx.decompress_framed(compressed)
 #=> {:ok, "banana bandana"}
 ```
 
+Process framed streams lazily when the complete input or output should not be kept in
+memory:
+
+```elixir
+output =
+  ["banana ", ["ban", "dana"]]
+  |> SnappyEx.compress_framed_stream()
+  |> SnappyEx.decompress_framed_stream(max_output_size: 1_000_000)
+  |> Enum.to_list()
+  |> IO.iodata_to_binary()
+
+output
+#=> "banana bandana"
+```
+
+Both streaming functions accept arbitrarily split iodata enumerables. They produce
+lazy streams, so errors from framed decompression are raised while the result is
+enumerated. If a consumer stops early, unread input is not consumed or validated.
+
 ## Development
 
 Run the test suite:
