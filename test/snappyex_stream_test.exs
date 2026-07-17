@@ -122,8 +122,16 @@ defmodule SnappyEx.StreamTest do
       SnappyEx.decompress_framed_stream(compressed, max_output_size: -1)
     end
 
-    assert_raise ArgumentError, ~r/unknown streaming options/, fn ->
+    assert_raise ArgumentError, ~r/unknown keys \[:unknown\]/, fn ->
       SnappyEx.decompress_framed_stream(compressed, unknown: true)
+    end
+
+    assert_raise ArgumentError, ~r/duplicate keys \[:max_output_size\]/, fn ->
+      SnappyEx.decompress_framed_stream(compressed, max_output_size: 1, max_output_size: 2)
+    end
+
+    assert_raise ArgumentError, ~r/expected a keyword list/, fn ->
+      SnappyEx.decompress_framed_stream(compressed, [:invalid])
     end
   end
 

@@ -62,16 +62,9 @@ defmodule SnappyEx.Framed.Decoder do
   end
 
   defp stream_max_output_size(opts) do
-    unless Keyword.keyword?(opts) do
-      raise ArgumentError, "expected streaming options to be a keyword list"
-    end
+    opts = Keyword.validate!(opts, max_output_size: :infinity)
 
-    case Enum.uniq(Keyword.keys(opts) -- [:max_output_size]) do
-      [] -> :ok
-      unknown -> raise ArgumentError, "unknown streaming options: #{inspect(unknown)}"
-    end
-
-    case Keyword.get(opts, :max_output_size, :infinity) do
+    case Keyword.fetch!(opts, :max_output_size) do
       :infinity -> :infinity
       size when is_integer(size) and size >= 0 -> size
       value -> raise ArgumentError, "expected :max_output_size to be a non-negative integer or :infinity, got: #{inspect(value)}"
