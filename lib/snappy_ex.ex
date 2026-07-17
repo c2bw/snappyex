@@ -10,8 +10,23 @@ defmodule SnappyEx do
   provide lazy, bounded-memory framed processing.
   """
 
-  @type decompress_error :: SnappyEx.Raw.decompress_error()
-  @type framed_decompress_error :: SnappyEx.Framed.decompress_error()
+  @type decompress_error ::
+          :empty_input
+          | :malformed_preamble
+          | :truncated_literal
+          | :truncated_copy
+          | :invalid_offset
+          | :invalid_length
+
+  @type framed_decompress_error ::
+          :missing_stream_identifier
+          | :invalid_stream_identifier
+          | :truncated_chunk_header
+          | :truncated_chunk
+          | :invalid_chunk_length
+          | :unsupported_chunk
+          | :checksum_mismatch
+          | {:invalid_compressed_chunk, decompress_error()}
 
   @doc """
   Compresses a binary into the raw Snappy block format.
