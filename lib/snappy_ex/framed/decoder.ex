@@ -6,7 +6,10 @@ defmodule SnappyEx.Framed.Decoder do
   alias SnappyEx.Raw.Decoder, as: RawDecoder
 
   @max_uncompressed_chunk_size 65_536
+  @max_compressed_chunk_size 76_490
+  @checksum_size 4
   @stream_identifier "sNaPpY"
+  @stream_identifier_size byte_size(@stream_identifier)
   @compressed_data 0x00
   @uncompressed_data 0x01
   @stream_identifier_chunk 0xFF
@@ -185,15 +188,21 @@ defmodule SnappyEx.Framed.Decoder do
     {:error, :missing_stream_identifier}
   end
 
-  defp begin_stream_chunk(state, @stream_identifier_chunk, length) do
+  defp begin_stream_chunk(state, @stream_identifier_chunk, length) when length == @stream_identifier_size do
     {:ok, %{state | phase: {:payload, @stream_identifier_chunk, length, []}}}
   end
 
-  defp begin_stream_chunk(state, @compressed_data, length) do
+  defp begin_stream_chunk(_state, @stream_identifier_chunk, _length), do: {:error, :invalid_stream_identifier}
+
+  defp begin_stream_chunk(state, @compressed_data, length)
+       when length >= @checksum_size and length <= @max_compressed_chunk_size do
     {:ok, %{state | phase: {:payload, @compressed_data, length, []}}}
   end
 
-  defp begin_stream_chunk(state, @uncompressed_data, length) when length <= @max_uncompressed_chunk_size + 4 do
+  defp begin_stream_chunk(_state, @compressed_data, _length), do: {:error, :invalid_chunk_length}
+
+  defp begin_stream_chunk(state, @uncompressed_data, length)
+       when length >= @checksum_size and length <= @max_uncompressed_chunk_size + @checksum_size do
     {:ok, %{state | phase: {:payload, @uncompressed_data, length, []}}}
   end
 
@@ -270,6 +279,10 @@ defmodule SnappyEx.Framed.Decoder do
         decode_chunks(chunk_rest, [decoded | acc])
       end
     end
+  end
+
+  defp decode_chunk(@compressed_data, payload) when byte_size(payload) > @max_compressed_chunk_size do
+    {:error, :invalid_chunk_length}
   end
 
   defp decode_chunk(@compressed_data, <<expected_checksum::little-32, compressed::binary>>) do

@@ -140,6 +140,46 @@ defmodule SnappyEx.StreamTest do
     end
   end
 
+  test "streaming decompression rejects invalid payload lengths before reading payload data" do
+    parent = self()
+
+    identifier_payload =
+      Stream.map(["ignored"], fn chunk ->
+        send(parent, :identifier_payload_read)
+        chunk
+      end)
+
+    identifier_source = Stream.concat([<<0xFF, 7::little-24>>], identifier_payload)
+
+    assert_raise ArgumentError, ~r/invalid_stream_identifier/, fn ->
+      identifier_source
+      |> SnappyEx.decompress_framed_stream()
+      |> Enum.to_list()
+    end
+
+    refute_received :identifier_payload_read
+
+    compressed_payload =
+      Stream.map(["ignored"], fn chunk ->
+        send(parent, :compressed_payload_read)
+        chunk
+      end)
+
+    compressed_source =
+      Stream.concat(
+        [@stream_identifier <> <<0x00, 0xFFFFFF::little-24>>],
+        compressed_payload
+      )
+
+    assert_raise ArgumentError, ~r/invalid_chunk_length/, fn ->
+      compressed_source
+      |> SnappyEx.decompress_framed_stream()
+      |> Enum.to_list()
+    end
+
+    refute_received :compressed_payload_read
+  end
+
   test "streaming decompression raises for corrupt and truncated input" do
     compressed = SnappyEx.compress_framed("abc")
     corrupted = binary_part(compressed, 0, byte_size(compressed) - 1) <> <<0>>
