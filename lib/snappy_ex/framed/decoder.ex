@@ -240,10 +240,13 @@ defmodule SnappyEx.Framed.Decoder do
     end
   end
 
+  defp finish_stream(%{seen_identifier: false, phase: :header, pending: <<>>}), do: :ok
   defp finish_stream(%{seen_identifier: false, phase: :header}), do: {:error, :missing_stream_identifier}
   defp finish_stream(%{phase: :header, pending: <<>>}), do: :ok
   defp finish_stream(%{phase: :header}), do: {:error, :truncated_chunk_header}
   defp finish_stream(_state), do: {:error, :truncated_chunk}
+
+  defp decode_initial_stream_identifier(<<>>), do: {:ok, <<>>}
 
   defp decode_initial_stream_identifier(<<@stream_identifier_chunk, 6::little-24, @stream_identifier, rest::binary>>) do
     {:ok, rest}

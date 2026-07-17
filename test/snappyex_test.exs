@@ -151,9 +151,11 @@ defmodule SnappyExTest do
     end
   end
 
-  test "compresses empty input to an empty framed snappy stream" do
+  test "encodes and decodes empty framed snappy streams" do
     assert SnappyEx.compress_framed("") == <<0xFF, 6::little-24, "sNaPpY">>
     assert SnappyEx.decompress_framed(<<0xFF, 6::little-24, "sNaPpY">>) == {:ok, ""}
+    assert SnappyEx.decompress_framed(<<>>) == {:ok, ""}
+    assert SnappyEx.decompress_framed!(<<>>) == ""
   end
 
   test "compresses and decompresses framed snappy streams" do
@@ -247,7 +249,6 @@ defmodule SnappyExTest do
     oversized_payload = <<0::little-32, oversized_raw::binary>>
     oversized_chunk = <<0x00, byte_size(oversized_payload)::little-24, oversized_payload::binary>>
 
-    assert SnappyEx.decompress_framed(<<>>) == {:error, :missing_stream_identifier}
     assert SnappyEx.decompress_framed("abc") == {:error, :missing_stream_identifier}
     assert SnappyEx.decompress_framed(<<0xFF, 5::little-24, "sNaPp">>) == {:error, :invalid_stream_identifier}
     assert SnappyEx.decompress_framed(stream_identifier <> <<0x00, 1, 0>>) == {:error, :truncated_chunk_header}

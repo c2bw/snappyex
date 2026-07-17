@@ -211,7 +211,7 @@ defmodule SnappyEx.StreamTest do
     end
 
     assert_raise ArgumentError, ~r/missing_stream_identifier/, fn ->
-      Enum.to_list(SnappyEx.decompress_framed_stream([]))
+      Enum.to_list(SnappyEx.decompress_framed_stream("abc"))
     end
   end
 
@@ -234,7 +234,10 @@ defmodule SnappyEx.StreamTest do
 
   test "empty streaming input produces and consumes an empty framed stream" do
     assert Enum.to_list(SnappyEx.compress_framed_stream([])) == [@stream_identifier]
+    assert Enum.to_list(SnappyEx.decompress_framed_stream([])) == []
+    assert Enum.to_list(SnappyEx.decompress_framed_stream(<<>>)) == []
     assert Enum.to_list(SnappyEx.decompress_framed_stream(@stream_identifier)) == []
+    assert Enum.to_list(SnappyEx.decompress_framed_stream(<<>>, max_output_size: 0)) == []
     assert Enum.to_list(SnappyEx.decompress_framed_stream(@stream_identifier, max_output_size: 0)) == []
   end
 
