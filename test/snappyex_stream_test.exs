@@ -26,7 +26,7 @@ defmodule SnappyEx.StreamTest do
   end
 
   test "streaming compression accepts binary and nested iodata input chunks" do
-    input_chunks = ["ab", [99, [<<100>>, 101]], <<102>>]
+    input_chunks = ["ab", [<<>>, 99, [[], <<100>>, 101]], [102 | <<103>>]]
     expected_input = IO.iodata_to_binary(input_chunks)
 
     assert input_chunks
@@ -36,6 +36,17 @@ defmodule SnappyEx.StreamTest do
     assert "abcdef"
            |> SnappyEx.compress_framed_stream()
            |> stream_to_binary() == SnappyEx.compress_framed("abcdef")
+  end
+
+  test "streaming compression consumes large iodata chunks incrementally" do
+    prefix = :binary.copy("a", 65_536)
+    compressed_stream = SnappyEx.compress_framed_stream([[prefix, :invalid_iodata]])
+
+    assert compressed_stream |> Enum.take(2) |> IO.iodata_to_binary() == SnappyEx.compress_framed(prefix)
+
+    assert_raise ArgumentError, fn ->
+      Enum.to_list(compressed_stream)
+    end
   end
 
   test "streaming compression handles byte-sized source chunks" do
