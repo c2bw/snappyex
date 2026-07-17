@@ -192,6 +192,32 @@ defmodule SnappyExTest do
     assert byte_size(second) > 4
   end
 
+  test "parallel framed compression preserves chunk order" do
+    stream_identifier = <<0xFF, 6::little-24, "sNaPpY">>
+
+    chunks = [
+      :binary.copy(<<0x11>>, 65_536),
+      :binary.copy(<<0x22>>, 65_536),
+      :binary.copy(<<0x33>>, 65_536),
+      :binary.copy(<<0x44>>, 65_536),
+      :binary.copy(<<0x55>>, 257)
+    ]
+
+    input = IO.iodata_to_binary(chunks)
+
+    encoded_chunks =
+      Enum.map(chunks, fn chunk ->
+        <<^stream_identifier::binary, encoded_chunk::binary>> = SnappyEx.compress_framed(chunk)
+        encoded_chunk
+      end)
+
+    expected = IO.iodata_to_binary([stream_identifier | encoded_chunks])
+    compressed = SnappyEx.compress_framed(input)
+
+    assert compressed == expected
+    assert SnappyEx.decompress_framed(compressed) == {:ok, input}
+  end
+
   test "framed decompression skips skippable chunks and repeated stream identifiers" do
     stream_identifier = <<0xFF, 6::little-24, "sNaPpY">>
     <<^stream_identifier::binary, data_chunk::binary>> = SnappyEx.compress_framed("ok")
