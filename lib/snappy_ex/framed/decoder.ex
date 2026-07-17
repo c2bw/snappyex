@@ -280,10 +280,14 @@ defmodule SnappyEx.Framed.Decoder do
 
       with {:ok, decoded} <- decode_chunk(type, payload),
            {:ok, output_size} <- add_output_size(output_size, decoded, max_output_size) do
-        decode_chunks(chunk_rest, [decoded | acc], output_size, max_output_size)
+        decode_chunks(chunk_rest, prepend_decoded(decoded, acc), output_size, max_output_size)
       end
     end
   end
+
+  defp prepend_decoded([], acc), do: acc
+  defp prepend_decoded(<<>>, acc), do: acc
+  defp prepend_decoded(decoded, acc), do: [decoded | acc]
 
   defp add_output_size(output_size, decoded, max_output_size) do
     output_size = output_size + decoded_size(decoded)

@@ -281,6 +281,36 @@ defmodule SnappyExTest do
     assert SnappyEx.decompress_framed(IO.iodata_to_binary(framed)) == {:ok, "ok"}
   end
 
+  test "one-shot framed decompression discards zero-output chunks" do
+    parent = self()
+    stream_identifier = <<0xFF, 6::little-24, "sNaPpY">>
+    framed = stream_identifier <> :binary.copy(<<0x80, 0::little-24>>, 500_000)
+
+    {pid, monitor_ref} =
+      :erlang.spawn_opt(
+        fn ->
+          result = SnappyEx.decompress_framed(framed, max_output_size: 0)
+          send(parent, {:decoded, self(), result})
+        end,
+        [
+          :monitor,
+          {:max_heap_size, %{size: 400_000, kill: true, error_logger: false}}
+        ]
+      )
+
+    receive do
+      {:decoded, ^pid, result} ->
+        assert result == {:ok, ""}
+
+      {:DOWN, ^monitor_ref, :process, ^pid, reason} ->
+        flunk("decoder exceeded its bounded heap: #{inspect(reason)}")
+    after
+      5_000 -> flunk("decoder did not finish within five seconds")
+    end
+
+    assert_receive {:DOWN, ^monitor_ref, :process, ^pid, :normal}
+  end
+
   test "rejects malformed framed snappy streams" do
     stream_identifier = <<0xFF, 6::little-24, "sNaPpY">>
     framed = SnappyEx.compress_framed("abc")
