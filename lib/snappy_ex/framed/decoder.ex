@@ -6,8 +6,10 @@ defmodule SnappyEx.Framed.Decoder do
   alias SnappyEx.Raw.Decoder, as: RawDecoder
 
   @max_uncompressed_chunk_size 65_536
-  @max_compressed_chunk_size 76_490
   @checksum_size 4
+  # A valid raw block can use a five-byte preamble and encode each output byte
+  # as a one-byte literal with a four-byte extended length.
+  @max_compressed_chunk_size 5 + @max_uncompressed_chunk_size * 6 + @checksum_size
   @stream_identifier "sNaPpY"
   @stream_identifier_size byte_size(@stream_identifier)
   @compressed_data 0x00

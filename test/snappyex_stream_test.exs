@@ -148,6 +148,25 @@ defmodule SnappyEx.StreamTest do
     end
   end
 
+  test "decompresses a compressed payload at the maximum valid encoded size" do
+    output = :binary.copy("a", 65_536)
+    preamble = <<0x80, 0x80, 0x84, 0x80, 0x00>>
+    extended_one_byte_literal = <<0xFC, 0, 0, 0, 0, ?a>>
+    raw = preamble <> :binary.copy(extended_one_byte_literal, 65_536)
+    checksum = SnappyEx.Framed.Checksum.masked(output)
+    payload = <<checksum::little-32, raw::binary>>
+    framed = <<@stream_identifier::binary, 0x00, byte_size(payload)::little-24, payload::binary>>
+
+    assert byte_size(raw) == 393_221
+    assert byte_size(payload) == 393_225
+    assert SnappyEx.decompress_framed(framed) == {:ok, output}
+
+    assert framed
+           |> binary_chunks(8_191)
+           |> SnappyEx.decompress_framed_stream()
+           |> stream_to_binary() == output
+  end
+
   test "streaming decompression rejects invalid payload lengths before reading payload data" do
     parent = self()
 
